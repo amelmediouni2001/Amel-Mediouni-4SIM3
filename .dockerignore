@@ -1,0 +1,12 @@
+.git
+.gitignore
+.mvn
+target/classes
+target/test-classes
+target/maven-status
+*.md
+Jenkinsfile
+.idea
+*.iml
+.vscode
+node_modules
