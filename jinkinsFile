@@ -2,22 +2,23 @@ pipeline {
     agent any
     
     tools {
-        maven 'M2_HOME'
+        maven 'maven-3.9'
         jdk 'JAVA_HOME'
     }
     
     environment {
-        DOCKER_IMAGE = 'amelmediouni/student-management'  // Your Docker Hub username
+        DOCKER_IMAGE = 'amelmediouni/student-management'
         DOCKER_TAG = "${BUILD_NUMBER}"
-        DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        DOCKER_CREDENTIALS_ID = 'dockerhub'
         APP_PORT = '8089'
+        DOCKER_PATH = '/usr/local/bin/docker'
     }
     
     stages {
         stage('📥 Checkout') {
             steps {
                 echo '=== Checking out source code ==='
-                checkout scm
+                git branch: 'main', url: 'https://github.com/amelmediouni2001/Amel-Mediouni-4SIM3.git'
             }
         }
         
@@ -30,7 +31,7 @@ pipeline {
                     echo "\nMaven Version:"
                     mvn -version
                     echo "\nDocker Version:"
-                    docker --version
+                    /usr/local/bin/docker --version
                 '''
             }
         }
@@ -74,8 +75,8 @@ pipeline {
                 echo "=== Building Docker Image: ${DOCKER_IMAGE}:${DOCKER_TAG} ==="
                 script {
                     sh """
-                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
+                        ${DOCKER_PATH} build -t ${DOCKER_IMAGE}:${DOCKER_TAG} -f Dockerfile.yml .
+                        ${DOCKER_PATH} tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
                     """
                 }
             }
@@ -85,8 +86,8 @@ pipeline {
             steps {
                 echo '=== Verifying Docker Image ==='
                 sh """
-                    docker images | grep ${DOCKER_IMAGE} || true
-                    docker inspect ${DOCKER_IMAGE}:${DOCKER_TAG}
+                    ${DOCKER_PATH} images | grep ${DOCKER_IMAGE} || true
+                    ${DOCKER_PATH} inspect ${DOCKER_IMAGE}:${DOCKER_TAG}
                 """
             }
         }
@@ -101,9 +102,9 @@ pipeline {
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
                         sh """
-                            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                            docker push ${DOCKER_IMAGE}:latest
+                            echo \$DOCKER_PASS | ${DOCKER_PATH} login -u \$DOCKER_USER --password-stdin
+                            ${DOCKER_PATH} push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                            ${DOCKER_PATH} push ${DOCKER_IMAGE}:latest
                         """
                     }
                 }
@@ -113,10 +114,10 @@ pipeline {
         stage('🛑 Stop Old Container') {
             steps {
                 echo '=== Stopping Old Container ==='
-                sh '''
-                    docker stop student-management-app || true
-                    docker rm student-management-app || true
-                '''
+                sh """
+                    ${DOCKER_PATH} stop student-management-app || true
+                    ${DOCKER_PATH} rm student-management-app || true
+                """
             }
         }
         
@@ -124,7 +125,7 @@ pipeline {
             steps {
                 echo '=== Deploying New Container ==='
                 sh """
-                    docker run -d \
+                    ${DOCKER_PATH} run -d \
                         --name student-management-app \
                         --restart unless-stopped \
                         -p ${APP_PORT}:${APP_PORT} \
@@ -141,10 +142,10 @@ pipeline {
                 echo '=== Verifying Deployment ==='
                 sh """
                     echo "Container Status:"
-                    docker ps | grep student-management-app || true
+                    ${DOCKER_PATH} ps | grep student-management-app || true
                     
                     echo "\nContainer Logs:"
-                    docker logs student-management-app --tail 50 || true
+                    ${DOCKER_PATH} logs student-management-app --tail 50 || true
                     
                     echo "\nTesting Application Endpoint:"
                     curl -f http://localhost:${APP_PORT}/actuator/health || echo "Application is starting..."
@@ -170,14 +171,14 @@ pipeline {
             ❌ PIPELINE FAILED!
             ========================================
             '''
-            sh 'docker logs student-management-app || true'
+            sh '${DOCKER_PATH} logs student-management-app || true'
         }
         always {
             echo '🧹 Cleaning up unused Docker resources...'
-            sh '''
-                docker image prune -f || true
-                docker container prune -f || true
-            '''
+            sh """
+                ${DOCKER_PATH} image prune -f || true
+                ${DOCKER_PATH} container prune -f || true
+            """
         }
     }
 }
